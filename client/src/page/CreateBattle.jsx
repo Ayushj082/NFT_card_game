@@ -3,8 +3,8 @@ import {PageHOC} from '../components';
 
 const CreateBattle = () => {
   return (
-    <div>
-      HELLO
+    <div class="text-sky-50">
+      Hello From Create Battle
     </div>
   )
 };

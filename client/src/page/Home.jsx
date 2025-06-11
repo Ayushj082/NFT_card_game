@@ -1,20 +1,45 @@
-<<<<<<< HEAD
-import React from 'react';
-
-const Home = () => {
-  return (
-    <div>
-      <h1 className="text-5xl p-3">Avax Gods</h1>
-      <h2 className="text-3xl p-3">Web3 NFT Battle-style Card Game</h2>
-      <p className="text-xl p-3">Made with 💜 by JavaScript Mastery</p>
-=======
-import React, {useState} from 'react';
+import React, {useEffect, useState} from 'react';
 import {PageHOC, CustomInput, CustomButton} from '../components';
 import { useGlobalContext } from '../context';
+import WalletConnect from '../components/WalletConnect';
+import { useNavigate } from 'react-router-dom';
 
 const Home = () => {
-  const { contract, walletAddress} = useGlobalContext();
+  const { contract, walletAddress, setShowAlert} = useGlobalContext();
   const [playerName, setPlayerName] = useState('');
+  const navigate= useNavigate();
+
+  const handleClick = async () => {
+    try {
+      const playerExists = await contract.isPlayer(walletAddress);
+      if (!playerExists) {
+        await contract.registerPlayer(playerName,playerName);
+
+        setShowAlert({
+          status: true,
+          type: 'success',
+          message: `${playerName} is being summoned`
+        });
+      }
+    } catch (error) {
+      setShowAlert({
+        status: true,
+        type: "failure",
+        message: error.message
+      });
+    }
+  }
+
+  useEffect(() => {
+    const checkForPlayerToken=async()=>{
+      const playerExists = await contract.isPlayer(walletAddress);
+      const playerTokenExists = await contract.isPlayerToken(walletAddress);
+
+      if (playerExists && playerTokenExists) navigate('/create-battle')
+    }
+
+    if (contract) checkForPlayerToken();
+}, [contract]);
 
   return (
     <div className='flex flex-col'>
@@ -27,17 +52,13 @@ const Home = () => {
 
       <CustomButton
         title="Register"
-        handleClick={() => {}}
+        handleClick={handleClick}
         restStyles="mt-6"
       />
->>>>>>> origin/master
     </div>
   )
 };
 
-<<<<<<< HEAD
-export default Home;
-=======
 export default PageHOC(
   Home,
   (
@@ -51,4 +72,3 @@ export default PageHOC(
     </>
   )
 );
->>>>>>> origin/master
