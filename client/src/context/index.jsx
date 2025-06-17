@@ -13,6 +13,11 @@ export const GlobalContextProvider = ({ children }) => {
     const [provider, setProvider] = useState(null);
     const [error, setError] = useState(null);
     const [showAlert, setShowAlert] = useState({status: false, type:'info', message: ''});
+    const [battleName, setBattleName] = useState('');
+    const [gameData, setGameData] = useState({ players: [], pendingBattles: [], activeBattle: null });
+    const [updateGameData, setUpdateGameData] = useState(0);
+    const [battleGround, setBattleGround] = useState('bg-astral');
+
     const connectionRef = useRef(null);
     const isConnecting = useRef(false);
     const navigate = useNavigate();
@@ -43,12 +48,15 @@ export const GlobalContextProvider = ({ children }) => {
 
     // Set up contract and connection
     const connectWallet = async () => {
+        console.log("Connecting wallet...");
         try {
             const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
             setWalletAddress(accounts[0]);
             setError('');
           } catch (err) {
             setError(err.message || 'Wallet connection failed');
+            console.error("Wallet connection error:", err);
+            return;
           }
 
         if (isConnecting.current) return;
@@ -57,11 +65,13 @@ export const GlobalContextProvider = ({ children }) => {
         
         try {
             const connection = await web3ModalRef.current.connect();
+            console.log("Wallet connected");
             connectionRef.current = connection;
             
             const provider = new ethers.providers.Web3Provider(connection);
             const signer = provider.getSigner();
             const contract = new ethers.Contract(ADDRESS, ABI, signer);
+            setContract(contract);
             
             // Get initial account
             const accounts = await provider.listAccounts();
@@ -73,12 +83,12 @@ export const GlobalContextProvider = ({ children }) => {
             connection.on('accountsChanged', handleAccountsChanged);
             connection.on('chainChanged', handleChainChanged);
             
-            setContract(contract);
+            // setContract(contract);
             return contract;
         } catch (err) {
             console.error("Connection error:", err);
             setError(err.message);
-            return null;
+            // return null;
         } finally {
             isConnecting.current = false;
         }
@@ -108,6 +118,7 @@ export const GlobalContextProvider = ({ children }) => {
         if (contract){
             createEventListeners({
                 navigate,contract, provider,walletAddress,setShowAlert,
+                setUpdateGameData,
             })
         }
     }, [contract]);
@@ -121,6 +132,29 @@ export const GlobalContextProvider = ({ children }) => {
         }
     }, [showAlert]);
 
+    //* Set the game data to the state
+    useEffect(() => {
+        const fetchGameData = async () => {
+            if (contract) {
+                const fetchedBattles = await contract.getAllBattles();
+                const pendingBattles = fetchedBattles.filter((battle) => battle.battleStatus === 0);
+                let activeBattle = null;
+
+                fetchedBattles.forEach((battle) => {
+                if (battle.players.find((player) => player.toLowerCase() === walletAddress.toLowerCase())) {
+                    if (battle.winner.startsWith('0x00')) {
+                    activeBattle = battle;
+                    }
+                }
+                });
+
+                setGameData({ pendingBattles: pendingBattles.slice(1), activeBattle });
+            }
+        };
+
+        fetchGameData();
+    }, [contract, updateGameData]);
+
     return (
         <GlobalContext.Provider value={{ 
             contract, 
@@ -128,7 +162,11 @@ export const GlobalContextProvider = ({ children }) => {
             connectWallet,
             error,
             showAlert,
-            setShowAlert
+            setShowAlert,
+            battleName, setBattleName,
+            gameData,
+            battleGround,
+            setBattleGround,
         }}>
             {children}
         </GlobalContext.Provider>
