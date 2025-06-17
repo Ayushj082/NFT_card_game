@@ -22,6 +22,17 @@ export const GlobalContextProvider = ({ children }) => {
     const isConnecting = useRef(false);
     const navigate = useNavigate();
 
+    useEffect(() => {
+      const battlegroundFromLocalStorage = localStorage.getItem('battleground');
+
+      if(battlegroundFromLocalStorage) {
+        setBattleGround(battlegroundFromLocalStorage);
+      }else {
+        localStorage.setItem('battleground', battleGround)
+      }
+    }, [])
+    
+
     // Initialize Web3Modal only once
     const web3ModalRef = useRef(
         new Web3Modal({
