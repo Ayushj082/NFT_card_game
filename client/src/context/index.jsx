@@ -4,6 +4,7 @@ import Web3Modal from 'web3modal';
 import { ADDRESS, ABI } from "../contract/index";
 import { createEventListeners } from "./createEventListeners";
 import { useNavigate } from "react-router-dom";
+import { GetParams } from "../utils/onboard";
 
 const GlobalContext = createContext();
 
@@ -17,6 +18,11 @@ export const GlobalContextProvider = ({ children }) => {
     const [gameData, setGameData] = useState({ players: [], pendingBattles: [], activeBattle: null });
     const [updateGameData, setUpdateGameData] = useState(0);
     const [battleGround, setBattleGround] = useState('bg-astral');
+    const [step, setStep]= useState(1);
+    const [errorMessage, setErrorMessage]= useState('');
+
+    const player1Ref = useRef();
+    const player2Ref = useRef();
 
     const connectionRef = useRef(null);
     const isConnecting = useRef(false);
@@ -31,7 +37,48 @@ export const GlobalContextProvider = ({ children }) => {
         localStorage.setItem('battleground', battleGround)
       }
     }, [])
-    
+
+    // Reset web3 onbording modal params
+    useEffect(() => {
+        const resetParams = async ()=>{
+            const currentStep = await GetParams();
+
+            setStep(currentStep.step)
+        }
+        resetParams();
+
+        window?.ethereum?.on('chainChanged', ()=>resetParams());
+        window?.ethereum?.on('accountsChanged', ()=>resetParams());
+      }, [])
+
+    //* Set the wallet address to the state
+    const updateCurrentWalletAddress = async () => {
+        if (isConnecting.current) return;
+        isConnecting.current = true;
+        
+        try {
+            const accounts = await window?.ethereum?.request({ method: 'eth_requestAccounts' });
+            if (accounts) {
+                setWalletAddress(accounts[0]);
+                const connection = await web3ModalRef.current.connect();
+                connectionRef.current = connection;
+                
+                const provider = new ethers.providers.Web3Provider(connection);
+                const signer = provider.getSigner();
+                const contract = new ethers.Contract(ADDRESS, ABI, signer);
+                setContract(contract);
+                
+                // Set up event listeners
+                connection.on('accountsChanged', handleAccountsChanged);
+                connection.on('chainChanged', handleChainChanged);
+            }
+        } catch (err) {
+            console.error("Connection error:", err);
+            setError(err.message);
+        } finally {
+            isConnecting.current = false;
+        }
+    };
 
     // Initialize Web3Modal only once
     const web3ModalRef = useRef(
@@ -58,59 +105,59 @@ export const GlobalContextProvider = ({ children }) => {
     };
 
     // Set up contract and connection
-    const connectWallet = async () => {
-        console.log("Connecting wallet...");
-        try {
-            const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-            setWalletAddress(accounts[0]);
-            setError('');
-          } catch (err) {
-            setError(err.message || 'Wallet connection failed');
-            console.error("Wallet connection error:", err);
-            return;
-          }
+    // const connectWallet = async () => {
+    //     console.log("Connecting wallet...");
+    //     try {
+    //         const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+    //         setWalletAddress(accounts[0]);
+    //         setError('');
+    //       } catch (err) {
+    //         setError(err.message || 'Wallet connection failed');
+    //         console.error("Wallet connection error:", err);
+    //         return;
+    //       }
 
-        if (isConnecting.current) return;
-        isConnecting.current = true;
-        setError(null);
+    //     if (isConnecting.current) return;
+    //     isConnecting.current = true;
+    //     setError(null);
         
-        try {
-            const connection = await web3ModalRef.current.connect();
-            console.log("Wallet connected");
-            connectionRef.current = connection;
+    //     try {
+    //         const connection = await web3ModalRef.current.connect();
+    //         console.log("Wallet connected");
+    //         connectionRef.current = connection;
             
-            const provider = new ethers.providers.Web3Provider(connection);
-            const signer = provider.getSigner();
-            const contract = new ethers.Contract(ADDRESS, ABI, signer);
-            setContract(contract);
+    //         const provider = new ethers.providers.Web3Provider(connection);
+    //         const signer = provider.getSigner();
+    //         const contract = new ethers.Contract(ADDRESS, ABI, signer);
+    //         setContract(contract);
             
-            // Get initial account
-            const accounts = await provider.listAccounts();
-            if (accounts.length > 0) {
-                setWalletAddress(accounts[0]);
-            }
+    //         // Get initial account
+    //         const accounts = await provider.listAccounts();
+    //         if (accounts.length > 0) {
+    //             setWalletAddress(accounts[0]);
+    //         }
             
-            // Set up event listeners
-            connection.on('accountsChanged', handleAccountsChanged);
-            connection.on('chainChanged', handleChainChanged);
+    //         // Set up event listeners
+    //         connection.on('accountsChanged', handleAccountsChanged);
+    //         connection.on('chainChanged', handleChainChanged);
             
-            // setContract(contract);
-            return contract;
-        } catch (err) {
-            console.error("Connection error:", err);
-            setError(err.message);
-            // return null;
-        } finally {
-            isConnecting.current = false;
-        }
-    };
+    //         // setContract(contract);
+    //         return contract;
+    //     } catch (err) {
+    //         console.error("Connection error:", err);
+    //         setError(err.message);
+    //         // return null;
+    //     } finally {
+    //         isConnecting.current = false;
+    //     }
+    // };
 
     // Initialize connection on mount
     useEffect(() => {
         const init = async () => {
             // Check if already connected
             if (web3ModalRef.current.cachedProvider) {
-                await connectWallet();
+                await updateCurrentWalletAddress();
             }
         };
         
@@ -126,13 +173,13 @@ export const GlobalContextProvider = ({ children }) => {
     }, []);
 
     useEffect(() => {
-        if (contract){
+        if (step !== -1 && contract){
             createEventListeners({
                 navigate,contract, provider,walletAddress,setShowAlert,
-                setUpdateGameData,
+                setUpdateGameData, player1Ref, player2Ref
             })
         }
-    }, [contract]);
+    }, [contract, step]);
 
     useEffect(() => {
         if (showAlert?.status) {
@@ -142,6 +189,21 @@ export const GlobalContextProvider = ({ children }) => {
             return () => clearTimeout(timer);
         }
     }, [showAlert]);
+
+    //* Handle error messages
+  useEffect(() => {
+    if (errorMessage) {
+      const parsedErrorMessage = errorMessage?.reason?.slice('execution reverted: '.length).slice(0, -1);
+
+      if (parsedErrorMessage) {
+        setShowAlert({
+          status: true,
+          type: 'failure',
+          message: parsedErrorMessage,
+        });
+      }
+    }
+  }, [errorMessage]);
 
     //* Set the game data to the state
     useEffect(() => {
@@ -169,8 +231,7 @@ export const GlobalContextProvider = ({ children }) => {
     return (
         <GlobalContext.Provider value={{ 
             contract, 
-            walletAddress, 
-            connectWallet,
+            walletAddress,
             error,
             showAlert,
             setShowAlert,
@@ -178,6 +239,9 @@ export const GlobalContextProvider = ({ children }) => {
             gameData,
             battleGround,
             setBattleGround,
+            errorMessage, setErrorMessage,
+            player1Ref, player2Ref,
+            updateCurrentWalletAddress
         }}>
             {children}
         </GlobalContext.Provider>

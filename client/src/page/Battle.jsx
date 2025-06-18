@@ -42,13 +42,37 @@ const Battle = () => {
           setPlayer1({ ...player01, att: p1Att, def: p1Def, health: p1H, mana: p1M });
           setPlayer2({ ...player02, att: 'X', def: 'X', health: p2H, mana: p2M });
         } catch (error) {
-          // setErrorMessage(error.message);
-          console.log(error);
+          setErrorMessage(error.message);
+          (error);
         }
       };
 
       if (contract && gameData.activeBattle) getPlayerInfo();
     }, [contract, gameData, battleName]);
+
+    useEffect(() => {
+      const timer = setTimeout(() => {
+        if (!gameData?.activeBattle) navigate('/');
+      }, [2000]);
+  
+      return () => clearTimeout(timer);
+    }, []);
+
+  const makeAMove = async (choice)=>{
+    playAudio(choice===1 ? attackSound : defenseSound);
+    try {
+      await contract.attackOrDefendChoice(choice, battleName, {
+        gasLimit: 200000
+      });
+      setShowAlert({
+        status : true,
+        type : 'info',
+        message : `Initiating ${choice===1? 'attack' : 'defense'}`
+      })
+    } catch (error) {
+      setErrorMessage(error);
+    }
+  }
 
   return (
     <div className={`${styles.flexBetween} ${styles.gameContainer} ${battleGround}`}>

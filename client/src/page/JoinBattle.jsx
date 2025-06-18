@@ -6,38 +6,52 @@ import { CustomButton, PageHOC } from '../components';
 import styles from '../styles';
 
 const JoinBattle = () => {
-  const { contract, gameData, setShowAlert, setBattleName, walletAddress } = useGlobalContext();
+  const { contract, gameData, setShowAlert, setBattleName, walletAddress, setErrorMessage} = useGlobalContext();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (gameData?.activeBattle?.battleStatus === 1) navigate(`/battle/${gameData.activeBattle.name}`);
+  }, [gameData]);
 
   const handleClick = async (battleName) => {
     setBattleName(battleName);
 
     try {
-      // await contract.joinBattle(battleName);
+      const tx = await contract.joinBattle(battleName, {
+        gasLimit: 200000
+      });
+      setShowAlert({ status: true, type: 'info',  message: `Joining ${battleName}…` });
 
-      // setShowAlert({ status: true, type: 'success', message: `Joining ${battleName}` });
+      await tx.wait();
 
-      const tx = await contract.joinBattle(battleName);
-     setShowAlert({ status: true, type: 'info',  message: `Joining ${battleName}…` });
-
-     // ★ Wait until the tx is mined so we’re sure the state is on‑chain
-     await tx.wait();
-
-     setShowAlert({ status: true, type: 'success', message: `Joined ${battleName}!` });
-     navigate(`/battle/${battleName}`);
+      setShowAlert({ status: true, type: 'success', message: `Joined ${battleName}!` });
+      navigate(`/battle/${battleName}`);
     } catch (error) {
-      console.log(error);
+      setErrorMessage(error);
     }
   };
 
-  // ★ Guard: if the tab reloads and the wallet is already inside an
- //   active battle, jump there automatically.
- useEffect(() => {
-   const active = gameData.activeBattle;
-   if (active?.players.includes(walletAddress)) {
-     navigate(`/battle/${active.name}`);
-   }
- }, [gameData.activeBattle, walletAddress]);
+  const handleDeleteBattle = async (battleName) => {
+    try {
+      const tx = await contract.deletePendingBattle(battleName, {
+        gasLimit: 200000
+      });
+      setShowAlert({ status: true, type: 'info', message: `Deleting battle ${battleName}…` });
+
+      await tx.wait();
+
+      setShowAlert({ status: true, type: 'success', message: `Battle ${battleName} deleted!` });
+    } catch (error) {
+      setErrorMessage(error);
+    }
+  };
+
+  useEffect(() => {
+    const active = gameData.activeBattle;
+    if (active?.players.includes(walletAddress)) {
+      navigate(`/battle/${active.name}`);
+    }
+  }, [gameData.activeBattle, walletAddress]);
 
   return (
     <>
@@ -49,10 +63,20 @@ const JoinBattle = () => {
               .map((battle, index) => (
                 <div key={battle.name + index} className={styles.flexBetween}>
                   <p className={styles.joinBattleTitle}>{index + 1}. {battle.name}</p>
-                  <CustomButton
-                    title="Join"
-                    handleClick={() => handleClick(battle.name)}
-                  />
+                  <div className="flex gap-2">
+                    {battle.players[0].toLowerCase() === walletAddress.toLowerCase() ? (
+                      <CustomButton
+                        title="Delete"
+                        handleClick={() => handleDeleteBattle(battle.name)}
+                        restStyles="bg-red-500 hover:bg-red-600"
+                      />
+                    ) : (
+                      <CustomButton
+                        title="Join"
+                        handleClick={() => handleClick(battle.name)}
+                      />
+                    )}
+                  </div>
                 </div>
               )) : (
                 <p className={styles.joinLoading}>Reload the page to see new battles</p>
@@ -61,7 +85,6 @@ const JoinBattle = () => {
         <p className={styles.infoText} onClick={() => navigate('/create-battle')}>
         Or create a new battle
         </p>
-      
     </>
   )
 }

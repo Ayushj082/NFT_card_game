@@ -1,11 +1,10 @@
 import React, {useEffect, useState} from 'react';
 import {PageHOC, CustomInput, CustomButton} from '../components';
 import { useGlobalContext } from '../context';
-import WalletConnect from '../components/WalletConnect';
 import { useNavigate } from 'react-router-dom';
 
 const Home = () => {
-  const { contract, walletAddress, setShowAlert} = useGlobalContext();
+  const { contract, walletAddress, setShowAlert, gameData, setErrorMessage} = useGlobalContext();
   const [playerName, setPlayerName] = useState('');
   const navigate= useNavigate();
 
@@ -13,7 +12,9 @@ const Home = () => {
     try {
       const playerExists = await contract.isPlayer(walletAddress);
       if (!playerExists) {
-        await contract.registerPlayer(playerName,playerName);
+        await contract.registerPlayer(playerName,playerName, {
+          gasLimit: 200000
+        });
 
         setShowAlert({
           status: true,
@@ -22,11 +23,7 @@ const Home = () => {
         });
       }
     } catch (error) {
-      setShowAlert({
-        status: true,
-        type: "failure",
-        message: error.message
-      });
+      setErrorMessage(error)
     }
   }
 
@@ -40,6 +37,12 @@ const Home = () => {
 
     if (contract) checkForPlayerToken();
 }, [contract]);
+
+  useEffect(() => {
+    if (gameData.activeBattle) {
+      navigate(`/battle/${gameData.activeBattle.name}`);
+    }
+  }, [gameData]);
 
   return (
     <div className='flex flex-col'>

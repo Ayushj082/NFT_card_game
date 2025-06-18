@@ -65,10 +65,9 @@ const CreateBattle = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // if (gameData?.activeBattle?.battleStatus === 1) {
-    //   navigate(`/battle/${gameData.activeBattle.name}`);
-    // } else 
-    if (gameData?.activeBattle?.battleStatus === 0) {
+    if (gameData?.activeBattle?.battleStatus === 1) {
+      navigate(`/battle/${gameData.activeBattle.name}`);
+    } else if (gameData?.activeBattle?.battleStatus === 0) {
       setWaitBattle(true);
     }
   }, [gameData]);
@@ -86,7 +85,9 @@ const CreateBattle = () => {
     }
 
     try {
-      const tx = await contract.createBattle(battleName);
+      const tx = await contract.createBattle(battleName, {
+        gasLimit: 200000
+      });
       await tx.wait(); // Wait for transaction to be mined
 
       setWaitBattle(true);
